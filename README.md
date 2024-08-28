@@ -76,7 +76,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - Special thanks to the open-source community for providing valuable tools and resources.
-- AI voice technology powered by [Mozilla TTS](https://github.com/mozilla/TTS).
+- AI voice technology powered by [Open AI Text to Speach](https://platform.openai.com/docs/guides/text-to-speech/quickstart?lang=node).
 
 ---
 
