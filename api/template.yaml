@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description:
+  converse
+Transform:
+- AWS::Serverless-2016-10-31
+Globals:
+  Function:
+    Tracing: Active
+  Api:
+    TracingEnabled: true
+Resources:
+  postCreateReaderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/post-create-reader.createReader
+      Runtime: nodejs20.x
+      Architectures:
+      - x86_64
+      MemorySize: 512
+      Timeout: 3120
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:OPENAI_API_KEY"
+      Description: A function that creates a reader session by identifying speakers and generating MP3 files using OpenAI.
+      Environment:
+        Variables:
+          OPENAI_API_KEY:
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /create-reader
+            Method: POST
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaSecretsManagerS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Grant permission to access secrets in Secrets Manager
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: "arn:aws:secretsmanager:<region>:<account-id>:secret:OPENAI_API_KEY"
+
+              # Grant permission to upload files to the S3 bucket
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: "arn:aws:s3:::converse-bucket/audio/*"
+Outputs:
+  WebEndpoint:
+    Description: API Gateway endpoint URL for Prod stage
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
