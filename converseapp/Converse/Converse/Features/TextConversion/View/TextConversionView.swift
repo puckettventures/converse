@@ -4,6 +4,7 @@ import AVFoundation
 struct TextConversionView: View {
     @State private var inputText: String = ""
     @State private var audioFiles: [URL] = []
+    @State private var isLoading = false
     @StateObject private var audioPlayer = AudioPlayer()
 
     var body: some View {
@@ -34,6 +35,19 @@ struct TextConversionView: View {
 
     func convertTextToConversation() {
         // Networking code to POST inputText and receive URLs of audio files
+        isLoading = true
+        NetworkingManager.shared.postTextForConversion(text: inputText, sessionName: "iOSAppSession") { result in
+            DispatchQueue.main.async {
+                isLoading = false
+                switch result {
+                case .success(let urls):
+                    audioFiles = urls
+                case .failure(let error):
+                    print("Error: \(error.localizedDescription)")
+                    // Handle error - show an alert or similar
+                }
+            }
+        }
     }
 }
 

@@ -11,7 +11,7 @@ import SwiftUI
 struct ConverseApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            TextConversionView()
         }
     }
 }

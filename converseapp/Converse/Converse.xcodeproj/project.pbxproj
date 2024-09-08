@@ -7,8 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		258366982C8B997500EF8C5E /* AudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 258366972C8B997500EF8C5E /* AudioPlayer.swift */; };
+		258366AF2C8DB6BE00EF8C5E /* NetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 258366AE2C8DB6BE00EF8C5E /* NetworkManager.swift */; };
 		259EE1572C8B7F5400D7F799 /* ConverseApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 259EE1562C8B7F5400D7F799 /* ConverseApp.swift */; };
-		259EE1592C8B7F5400D7F799 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 259EE1582C8B7F5400D7F799 /* ContentView.swift */; };
+		259EE1592C8B7F5400D7F799 /* TextConversionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 259EE1582C8B7F5400D7F799 /* TextConversionView.swift */; };
 		259EE15B2C8B7F5700D7F799 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 259EE15A2C8B7F5700D7F799 /* Assets.xcassets */; };
 		259EE15E2C8B7F5700D7F799 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 259EE15D2C8B7F5700D7F799 /* Preview Assets.xcassets */; };
 		259EE1682C8B7F5700D7F799 /* ConverseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 259EE1672C8B7F5700D7F799 /* ConverseTests.swift */; };
@@ -34,9 +36,11 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		258366972C8B997500EF8C5E /* AudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayer.swift; sourceTree = "<group>"; };
+		258366AE2C8DB6BE00EF8C5E /* NetworkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkManager.swift; sourceTree = "<group>"; };
 		259EE1532C8B7F5400D7F799 /* Converse.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Converse.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		259EE1562C8B7F5400D7F799 /* ConverseApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConverseApp.swift; sourceTree = "<group>"; };
-		259EE1582C8B7F5400D7F799 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		259EE1582C8B7F5400D7F799 /* TextConversionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextConversionView.swift; sourceTree = "<group>"; };
 		259EE15A2C8B7F5700D7F799 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		259EE15D2C8B7F5700D7F799 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		259EE1632C8B7F5700D7F799 /* ConverseTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ConverseTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -71,6 +75,107 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		258366992C8BAB6400EF8C5E /* Views */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		2583669F2C8DAE7100EF8C5E /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				258366AE2C8DB6BE00EF8C5E /* NetworkManager.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		258366A32C8DB54A00EF8C5E /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				258366A52C8DB57400EF8C5E /* AudioPlayback */,
+				258366A42C8DB56300EF8C5E /* TextConversion */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		258366A42C8DB56300EF8C5E /* TextConversion */ = {
+			isa = PBXGroup;
+			children = (
+				258366AB2C8DB5C800EF8C5E /* Controler */,
+				258366AA2C8DB5BF00EF8C5E /* View */,
+				258366A92C8DB5B600EF8C5E /* Model */,
+			);
+			path = TextConversion;
+			sourceTree = "<group>";
+		};
+		258366A52C8DB57400EF8C5E /* AudioPlayback */ = {
+			isa = PBXGroup;
+			children = (
+				258366A82C8DB59900EF8C5E /* Controler */,
+				258366A72C8DB58E00EF8C5E /* View */,
+				258366A62C8DB58500EF8C5E /* Model */,
+			);
+			path = AudioPlayback;
+			sourceTree = "<group>";
+		};
+		258366A62C8DB58500EF8C5E /* Model */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Model;
+			sourceTree = "<group>";
+		};
+		258366A72C8DB58E00EF8C5E /* View */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = View;
+			sourceTree = "<group>";
+		};
+		258366A82C8DB59900EF8C5E /* Controler */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Controler;
+			sourceTree = "<group>";
+		};
+		258366A92C8DB5B600EF8C5E /* Model */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Model;
+			sourceTree = "<group>";
+		};
+		258366AA2C8DB5BF00EF8C5E /* View */ = {
+			isa = PBXGroup;
+			children = (
+				259EE1582C8B7F5400D7F799 /* TextConversionView.swift */,
+			);
+			path = View;
+			sourceTree = "<group>";
+		};
+		258366AB2C8DB5C800EF8C5E /* Controler */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Controler;
+			sourceTree = "<group>";
+		};
+		258366AC2C8DB64800EF8C5E /* Modifiers */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Modifiers;
+			sourceTree = "<group>";
+		};
+		258366AD2C8DB65200EF8C5E /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Utilities;
+			sourceTree = "<group>";
+		};
 		259EE14A2C8B7F5300D7F799 = {
 			isa = PBXGroup;
 			children = (
@@ -94,10 +199,15 @@
 		259EE1552C8B7F5400D7F799 /* Converse */ = {
 			isa = PBXGroup;
 			children = (
+				258366AD2C8DB65200EF8C5E /* Utilities */,
+				258366AC2C8DB64800EF8C5E /* Modifiers */,
+				258366A32C8DB54A00EF8C5E /* Features */,
+				2583669F2C8DAE7100EF8C5E /* Services */,
+				258366992C8BAB6400EF8C5E /* Views */,
 				259EE1562C8B7F5400D7F799 /* ConverseApp.swift */,
-				259EE1582C8B7F5400D7F799 /* ContentView.swift */,
 				259EE15A2C8B7F5700D7F799 /* Assets.xcassets */,
 				259EE15C2C8B7F5700D7F799 /* Preview Content */,
+				258366972C8B997500EF8C5E /* AudioPlayer.swift */,
 			);
 			path = Converse;
 			sourceTree = "<group>";
@@ -257,8 +367,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				259EE1592C8B7F5400D7F799 /* ContentView.swift in Sources */,
+				258366AF2C8DB6BE00EF8C5E /* NetworkManager.swift in Sources */,
+				259EE1592C8B7F5400D7F799 /* TextConversionView.swift in Sources */,
 				259EE1572C8B7F5400D7F799 /* ConverseApp.swift in Sources */,
+				258366982C8B997500EF8C5E /* AudioPlayer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

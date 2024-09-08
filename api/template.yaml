@@ -17,15 +17,12 @@ Resources:
       Architectures:
       - x86_64
       MemorySize: 512
-      Timeout: 3120
+      Timeout: 900
       Role: !GetAtt LambdaExecutionRole.Arn
-      Policies:
-        - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:OPENAI_API_KEY"
-      Description: A function that creates a reader session by identifying speakers and generating MP3 files using OpenAI.
       Environment:
         Variables:
-          OPENAI_API_KEY:
+          OPENAI_API_KEY: !Sub "{{resolve:secretsmanager:dev/converse/OpenAI}}"
+      Description: A function that creates a reader session by identifying speakers and generating MP3 files using OpenAI.
       Events:
         Api:
           Type: Api
@@ -40,7 +37,8 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: lambda.amazonaws.com
+              Service:
+                - lambda.amazonaws.com
             Action: sts:AssumeRole
       Policies:
         - PolicyName: LambdaSecretsManagerS3Access
@@ -51,13 +49,22 @@ Resources:
               - Effect: Allow
                 Action:
                   - secretsmanager:GetSecretValue
-                Resource: "arn:aws:secretsmanager:<region>:<account-id>:secret:OPENAI_API_KEY"
+                Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:dev/converse/OpenAI*"
 
               # Grant permission to upload files to the S3 bucket
               - Effect: Allow
                 Action:
                   - s3:PutObject
                 Resource: "arn:aws:s3:::converse-bucket/audio/*"
+
+                # Grant permission to log to CloudWatch
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+
 Outputs:
   WebEndpoint:
     Description: API Gateway endpoint URL for Prod stage
