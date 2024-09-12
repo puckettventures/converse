@@ -1,36 +1,29 @@
 # Converse API
 
-The Converse API is a powerful backend service that allows you to manage and interact with text-to-speech (TTS) sessions through a set of well-defined API endpoints. Built as an AWS SAM (Serverless Application Model) application, it leverages the scalability and security of AWS while providing a robust and flexible interface for your application's needs.
+The Converse API is a powerful backend service that allows you to manage and interact with text-to-speech (TTS) sessions through a set of well-defined API endpoints. Built using AWS SAM (Serverless Application Model), it provides scalable and secure functionality with AWS services such as Lambda, SQS, and DynamoDB.
 
 ## Features
 
-### 1. Create Reader
-**Endpoint**: `/create-reader`
+### 1. Narrate Conversation
+**Endpoint**: `/narrate-conversation`
 
 **Method**: `POST`
 
-**Description**: Initializes a new reader session by accepting a large body of text and a session name. This endpoint processes the text, identifies the number of voices required, and stores the session for future use. The conversation index is initialized at 0, allowing sequential reading.
+**Description**: Initializes a new TTS session by accepting a text input. The service breaks the text into parts and queues each part for voice generation using the OpenAI API.
 
 **Parameters**:
-- `text`: The body of text to be read.
-- `session_name`: A unique name for the reader session.
+- `text`: The body of text to be narrated.
+- `session_name`: A unique identifier for the narration session.
 
-**CRUD Operations**:
-- **Create**: Initialize a new reader session.
-- **Read**: Retrieve the reader session information.
-- **Update**: Modify the existing reader session details.
-- **Delete**: Remove a reader session.
-
-### 2. Read
-**Endpoint**: `/read`
+### 2. Check Narration Status
+**Endpoint**: `/check-narration-status/{session_name}`
 
 **Method**: `GET`
 
-**Description**: Retrieves the next voice data file chunk from the initialized reader session, along with a `chunk_id` to indicate which part of the text is being read. This allows the API user to keep track of the progress in reading the session.
+**Description**: Retrieves the current status of a narration session, including whether the TTS generation is complete and the list of generated audio files.
 
 **Parameters**:
-- `session_name`: The name of the reader session.
-- `chunk_id`: (Optional) The ID of the last retrieved chunk, to get the subsequent chunk.
+- `session_name`: The name of the session to check.
 
 ## Setup and Requirements
 
@@ -40,11 +33,13 @@ To work with this project, ensure you have the following tools installed:
 - **Node.js 20.x**: [Install Node.js](https://nodejs.org/en/)
 - **Docker**: [Install Docker Community Edition](https://hub.docker.com/search/?type=edition&offering=community)
 
-These tools will allow you to build, test, and deploy the project both locally and to AWS.
+These tools will allow you to build, test, and deploy the project locally and to AWS.
 
 ## Deployment
 
-This API is deployed as an AWS SAM application. Follow these steps to deploy:
+This API is deployed as an AWS SAM application. The deployment process is flexible, allowing you to use AWS SSM parameters or fallback values depending on the deployment environment.
+
+### First-Time Deployment
 
 1. **Clone the Repository**:
     ```bash
@@ -61,52 +56,72 @@ This API is deployed as an AWS SAM application. Follow these steps to deploy:
     ```bash
     sam deploy --guided
     ```
-    Follow the prompts to configure your AWS settings.
 
-The prompts include:
-- **Stack Name**: Unique to your account and region (e.g., your project name).
-- **AWS Region**: The region where you want to deploy your app.
-- **Confirm Changes Before Deploy**: Optionally view the change set before deployment.
-- **Allow IAM Role Creation**: Choose whether SAM can create the necessary IAM roles.
-- **Save Parameters to `samconfig.toml`**: Store your deployment configurations for future ease of use.
+    During the guided deployment, you will be prompted for several parameters, including:
 
-## Local Development and Testing
+    - **Stack Name**: The name of the CloudFormation stack.
+    - **AWS Region**: The AWS region where you want to deploy the stack.
+    - **UseSSMParameters**: You will be asked whether to use SSM parameters (`true`) or fallback values (`false`). Select `true` to use SSM parameters stored in AWS, or `false` for initial deployment or local development.
+    - **Allow IAM Role Creation**: Confirm the creation of necessary IAM roles.
+    - **Save Parameters to `samconfig.toml`**: Save the configuration to simplify future deployments.
 
-### Build Your Application
+### Use of `UseSSMParameters`
+
+The `UseSSMParameters` flag allows you to control whether to use values from AWS Systems Manager (SSM) Parameter Store or fallback values for local development or first-time deployment. This setting can be passed during deployment:
+
 ```bash
-sam build
-```
-This command will install dependencies and prepare a deployment package in the `.aws-sam/build` folder.
-
-### Invoke Functions Locally
-To test specific functions, invoke them with a test event using the following commands:
-```bash
-sam local invoke postCreateReaderFunction --event ./events/event-post-create-reader.json
-sam local invoke getAllItemsFunction --event ./events/event-get-all-items.json
+sam deploy --guided --parameter-overrides UseSSMParameters=true
 ```
 
-### Emulate the API Locally
-To run the API locally on port 3000:
-```bash
-sam local start-api
-curl http://localhost:3000/
-```
+When `UseSSMParameters` is set to `true`, AWS SAM will retrieve secrets (like OpenAI API keys) and other configuration values from SSM. If set to `false`, it will use fallback values specified in the `template.yaml`.
 
-To test the `create-reader` endpoint locally using `curl`:
-```bash
-curl --location --request POST 'http://localhost:3000/create-reader' \
---header 'Content-Type: application/json' \
---data-raw '{
-    "text": "Bret Stephens: Hi, Gail. How do you feel about price controls?\n\nGail Collins: Bret, we’ve spent a long time agreeing about stuff, thanks to our shared loathing of Donald Trump.",
-    "session_name": "sample-session"
-}'
-```
+### Local Development and Testing
 
-This will invoke the `/create-reader` endpoint locally with a sample text and session name.
+To emulate the API locally and test its functionality, follow these steps:
+
+1. **Build the Application**:
+    ```bash
+    sam build
+    ```
+
+2. **Start the API Locally**:
+    ```bash
+    sam local start-api
+    ```
+
+    This will start the API on `http://localhost:3000`.
+
+3. **Invoke the Endpoints Locally**:
+
+    You can use `curl` to test the `narrate-conversation` and `check-narration-status` endpoints:
+
+    - **POST to Narrate Conversation**:
+      ```bash
+      curl --location --request POST 'http://localhost:3000/narrate-conversation' \
+      --header 'Content-Type: application/json' \
+      --data-raw '{
+          "text": "Bret: Hi, Gail. How do you feel about price controls? Gail: this is seriuos talk.",
+          "session_name": "sample-session"
+      }'
+      ```
+
+    - **GET to Check Narration Status**:
+      ```bash
+      curl --location --request GET 'http://localhost:3000/check-narration-status/sample-session'
+      ```
+
+### CRUD Operations
+- **Create**: Initialize a new narration session.
+- **Read**: Retrieve the narration session information, including generated audio files.
+- **Update**: Modify an existing session (if applicable).
+- **Delete**: Remove a session (future feature).
 
 ## Usage
 
-Once deployed, you can interact with the API endpoints using standard HTTP methods. For example, to create a new reader session, you might send a `POST` request to the `/create-reader` endpoint with the required parameters.
+Once deployed, you can interact with the API using the following endpoints:
+
+- **`/narrate-conversation` (POST)**: Send text to be narrated by OpenAI TTS and generate audio files.
+- **`/check-narration-status/{session_name}` (GET)**: Check the status of the narration and retrieve the list of generated audio files.
 
 ## Contributing
 
