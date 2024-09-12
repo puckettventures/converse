@@ -1,34 +1,153 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description:
-  converse
+Description: Converse app for narrating conversations and generating audio files asynchronously with polling
+
 Transform:
-- AWS::Serverless-2016-10-31
+  - AWS::Serverless-2016-10-31
+
+Parameters:
+  UseSSMParameters:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Set this to 'false' to use fallback values instead of SSM parameters during local development or initial deployment."
+
 Globals:
   Function:
     Tracing: Active
-  Api:
-    TracingEnabled: true
+    Environment:
+      Variables:
+        # Conditionally use SSM parameters or fallback placeholders
+        SQS_QUEUE_URL: !If
+          - UseFallbackValues
+          - "PLACEHOLDER_SQS_QUEUE_URL"
+          - !Sub "{{resolve:ssm:/converse/SQS_QUEUE_URL}}"
+        DYNAMODB_TABLE: !If
+          - UseFallbackValues
+          - "PLACEHOLDER_DYNAMODB_TABLE"
+          - !Sub "{{resolve:ssm:/converse/DYNAMODB_TABLE}}"
+        OPENAI_API_KEY: !Sub "{{resolve:secretsmanager:dev/converse/OpenAI}}"
+
+Conditions:
+  # Condition to use fallback values (initial deployment or local development)
+  UseFallbackValues: !Equals [ !Ref UseSSMParameters, "false" ]
+
 Resources:
-  postCreateReaderFunction:
+  # Define the SQS queue
+  AudioQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: AudioQueue
+      VisibilityTimeout: 900
+
+  # Define the DynamoDB table
+  NarrationStatusTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: NarrationStatusTable
+      AttributeDefinitions:
+        - AttributeName: session_name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: session_name
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  # Lambda function to store SQS Queue URL and DynamoDB Table name in Parameter Store
+  StoreParamsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/handlers/post-create-reader.createReader
+      Handler: src/handlers/store-params.handler
       Runtime: nodejs20.x
-      Architectures:
-      - x86_64
+      MemorySize: 256
+      Timeout: 600
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          SSM_PARAMETER_PATH_SQS: "/converse/SQS_QUEUE_URL"
+          SSM_PARAMETER_PATH_DYNAMODB: "/converse/DYNAMODB_TABLE"
+
+  # Custom resource that triggers the Lambda function to store values in Parameter Store
+  StoreParameters:
+    Type: Custom::StoreParams
+    Properties:
+      ServiceToken: !GetAtt StoreParamsFunction.Arn
+      SQSQueueUrl: !GetAtt AudioQueue.QueueUrl
+      DynamoDBTableName: !Ref NarrationStatusTable
+
+  # Lambda function that handles narration and queues messages
+  NarrateConversationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/narrate-conversation.narrateConversation
+      Runtime: nodejs20.x
+      MemorySize: 512
+      Timeout: 300
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          SQS_QUEUE_URL: !If
+            - UseFallbackValues
+            - "PLACEHOLDER_SQS_QUEUE_URL"
+            - !Sub "{{resolve:ssm:/converse/SQS_QUEUE_URL}}"
+          DYNAMODB_TABLE: !If
+            - UseFallbackValues
+            - "PLACEHOLDER_DYNAMODB_TABLE"
+            - !Sub "{{resolve:ssm:/converse/DYNAMODB_TABLE}}"
+          OPENAI_API_KEY: !Sub "{{resolve:secretsmanager:dev/converse/OpenAI}}"
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /narrate-conversation
+            Method: POST
+
+  # Lambda function that processes the SQS queue messages and generates audio files
+  GenerateAudioFilesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/generate-audio-files.generateAudioFiles
+      Runtime: nodejs20.x
       MemorySize: 512
       Timeout: 900
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
+          SQS_QUEUE_URL: !If
+            - UseFallbackValues
+            - "PLACEHOLDER_SQS_QUEUE_URL"
+            - !Sub "{{resolve:ssm:/converse/SQS_QUEUE_URL}}"
+          DYNAMODB_TABLE: !If
+            - UseFallbackValues
+            - "PLACEHOLDER_DYNAMODB_TABLE"
+            - !Sub "{{resolve:ssm:/converse/DYNAMODB_TABLE}}"
+          S3_BUCKET: "converse-bucket"
           OPENAI_API_KEY: !Sub "{{resolve:secretsmanager:dev/converse/OpenAI}}"
-      Description: A function that creates a reader session by identifying speakers and generating MP3 files using OpenAI.
       Events:
-        Api:
-          Type: Api
+        SQSQueueEvent:
+          Type: SQS
           Properties:
-            Path: /create-reader
-            Method: POST
+            Queue: !GetAtt AudioQueue.Arn
+            BatchSize: 3
+
+  # Lambda function for checking the status of narration
+  CheckNarrationStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/check-narration-status.checkNarrationStatus
+      Runtime: nodejs20.x
+      MemorySize: 256
+      Timeout: 30
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !If
+            - UseFallbackValues
+            - "PLACEHOLDER_DYNAMODB_TABLE"
+            - !Sub "{{resolve:ssm:/converse/DYNAMODB_TABLE}}"
+
+  # IAM Role for Lambda Functions
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -41,31 +160,66 @@ Resources:
                 - lambda.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: LambdaSecretsManagerS3Access
+        - PolicyName: LambdaSSMCloudWatchAccess
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              # Grant permission to access secrets in Secrets Manager
+              # Allow access to SSM Parameter Store
               - Effect: Allow
                 Action:
-                  - secretsmanager:GetSecretValue
-                Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:dev/converse/OpenAI*"
+                  - ssm:PutParameter
+                  - ssm:GetParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/converse/*"
 
-              # Grant permission to upload files to the S3 bucket
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                Resource: "arn:aws:s3:::converse-bucket/audio/*"
-
-                # Grant permission to log to CloudWatch
+              # Allow Lambda to log to CloudWatch
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+        - PolicyName: LambdaSecretsManagerS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Allow access to Secrets Manager
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:dev/converse/OpenAI*"
+              
+              # Allow access to S3
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: "arn:aws:s3:::converse-bucket/audio/*"
+
+              # Allow access to SQS (including GetQueueAttributes)
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueUrl
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt AudioQueue.Arn
+
+              # Allow access to DynamoDB
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:GetItem
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/NarrationStatusTable"
+
+              # Allow Lambda to put parameters into SSM Parameter Store
+              - Effect: Allow
+                Action:
+                  - ssm:PutParameter
+                  - ssm:GetParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/converse/*"
 
 Outputs:
-  WebEndpoint:
+  ApiUrl:
     Description: API Gateway endpoint URL for Prod stage
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"

@@ -11,7 +11,7 @@ class NetworkingManager {
     static let shared = NetworkingManager()  // Singleton instance
 
     func postTextForConversion(text: String, sessionName: String, completion: @escaping (Result<[URL], Error>) -> Void) {
-        let urlString = "https://oqctuo1rja.execute-api.us-east-1.amazonaws.com/Prod/create-reader"
+        let urlString = "https://irssear188.execute-api.us-east-1.amazonaws.com/Prod/narrate-conversation"
         guard let url = URL(string: urlString) else {
             completion(.failure(NetworkError.urlInvalid))
             return
