@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Converse app for narrating conversations and generating audio files asynchronously with polling
+Description: Converse app for narrating conversations, identifying speakers, and generating audio files asynchronously with polling
 
 Transform:
   - AWS::Serverless-2016-10-31
@@ -16,32 +16,45 @@ Parameters:
 Globals:
   Function:
     Tracing: Active
+    Runtime: nodejs20.x
+    MemorySize: 512
+    Timeout: 300
     Environment:
       Variables:
-        # Conditionally use SSM parameters or fallback placeholders
         SQS_QUEUE_URL: !If
           - UseFallbackValues
           - "PLACEHOLDER_SQS_QUEUE_URL"
           - !Sub "{{resolve:ssm:/converse/SQS_QUEUE_URL}}"
+        IDENTIFY_SPEAKERS_QUEUE_URL: !If
+          - UseFallbackValues
+          - "PLACEHOLDER_IDENTIFY_SPEAKERS_QUEUE_URL"
+          - !Sub "{{resolve:ssm:/converse/IDENTIFY_SPEAKERS_QUEUE_URL}}"
         DYNAMODB_TABLE: !If
           - UseFallbackValues
           - "PLACEHOLDER_DYNAMODB_TABLE"
           - !Sub "{{resolve:ssm:/converse/DYNAMODB_TABLE}}"
         OPENAI_API_KEY: !Sub "{{resolve:secretsmanager:dev/converse/OpenAI}}"
+        S3_BUCKET: "converse-bucket"
 
 Conditions:
-  # Condition to use fallback values (initial deployment or local development)
   UseFallbackValues: !Equals [ !Ref UseSSMParameters, "false" ]
 
 Resources:
-  # Define the SQS queue
+  # Define the SQS queue for Audio generation
   AudioQueue:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: AudioQueue
       VisibilityTimeout: 900
 
-  # Define the DynamoDB table
+  # Define the SQS queue for Speaker Identification
+  IdentifySpeakersQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: IdentifySpeakersQueue
+      VisibilityTimeout: 900
+
+  # Define the DynamoDB table for tracking conversation statuses and pending audio files
   NarrationStatusTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -66,6 +79,7 @@ Resources:
       Environment:
         Variables:
           SSM_PARAMETER_PATH_SQS: "/converse/SQS_QUEUE_URL"
+          SSM_PARAMETER_PATH_SPEAKERS_SQS: "/converse/IDENTIFY_SPEAKERS_QUEUE_URL"
           SSM_PARAMETER_PATH_DYNAMODB: "/converse/DYNAMODB_TABLE"
 
   # Custom resource that triggers the Lambda function to store values in Parameter Store
@@ -74,28 +88,15 @@ Resources:
     Properties:
       ServiceToken: !GetAtt StoreParamsFunction.Arn
       SQSQueueUrl: !GetAtt AudioQueue.QueueUrl
+      IdentifySpeakersQueueUrl: !GetAtt IdentifySpeakersQueue.QueueUrl
       DynamoDBTableName: !Ref NarrationStatusTable
 
   # Lambda function that handles narration and queues messages
   NarrateConversationFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/handlers/narrate-conversation.narrateConversation
-      Runtime: nodejs20.x
-      MemorySize: 512
-      Timeout: 300
       Role: !GetAtt LambdaExecutionRole.Arn
-      Environment:
-        Variables:
-          SQS_QUEUE_URL: !If
-            - UseFallbackValues
-            - "PLACEHOLDER_SQS_QUEUE_URL"
-            - !Sub "{{resolve:ssm:/converse/SQS_QUEUE_URL}}"
-          DYNAMODB_TABLE: !If
-            - UseFallbackValues
-            - "PLACEHOLDER_DYNAMODB_TABLE"
-            - !Sub "{{resolve:ssm:/converse/DYNAMODB_TABLE}}"
-          OPENAI_API_KEY: !Sub "{{resolve:secretsmanager:dev/converse/OpenAI}}"
+      Handler: src/handlers/narrate-conversation.narrateConversation
       Events:
         Api:
           Type: Api
@@ -103,27 +104,25 @@ Resources:
             Path: /narrate-conversation
             Method: POST
 
+  # Lambda function that identifies speakers in paragraphs and sentences
+  IdentifySpeakersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Handler: src/handlers/identify-speakers.identifySpeakers
+      Events:
+        SQSQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt IdentifySpeakersQueue.Arn
+
   # Lambda function that processes the SQS queue messages and generates audio files
   GenerateAudioFilesFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/handlers/generate-audio-files.generateAudioFiles
-      Runtime: nodejs20.x
-      MemorySize: 512
-      Timeout: 900
       Role: !GetAtt LambdaExecutionRole.Arn
-      Environment:
-        Variables:
-          SQS_QUEUE_URL: !If
-            - UseFallbackValues
-            - "PLACEHOLDER_SQS_QUEUE_URL"
-            - !Sub "{{resolve:ssm:/converse/SQS_QUEUE_URL}}"
-          DYNAMODB_TABLE: !If
-            - UseFallbackValues
-            - "PLACEHOLDER_DYNAMODB_TABLE"
-            - !Sub "{{resolve:ssm:/converse/DYNAMODB_TABLE}}"
-          S3_BUCKET: "converse-bucket"
-          OPENAI_API_KEY: !Sub "{{resolve:secretsmanager:dev/converse/OpenAI}}"
+      Handler: src/handlers/generate-audio-files.generateAudioFiles
+      Timeout: 900  # Override timeout for this function
       Events:
         SQSQueueEvent:
           Type: SQS
@@ -135,17 +134,10 @@ Resources:
   CheckNarrationStatusFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/handlers/check-narration-status.checkNarrationStatus
-      Runtime: nodejs20.x
-      MemorySize: 256
-      Timeout: 30
       Role: !GetAtt LambdaExecutionRole.Arn
-      Environment:
-        Variables:
-          DYNAMODB_TABLE: !If
-            - UseFallbackValues
-            - "PLACEHOLDER_DYNAMODB_TABLE"
-            - !Sub "{{resolve:ssm:/converse/DYNAMODB_TABLE}}"
+      Handler: src/handlers/check-narration-status.checkNarrationStatus
+      MemorySize: 256  # Override memory size for this function
+      Timeout: 30
 
   # IAM Role for Lambda Functions
   LambdaExecutionRole:
@@ -202,7 +194,9 @@ Resources:
                   - sqs:DeleteMessage
                   - sqs:GetQueueUrl
                   - sqs:GetQueueAttributes
-                Resource: !GetAtt AudioQueue.Arn
+                Resource:
+                  - !GetAtt AudioQueue.Arn
+                  - !GetAtt IdentifySpeakersQueue.Arn
 
               # Allow access to DynamoDB
               - Effect: Allow

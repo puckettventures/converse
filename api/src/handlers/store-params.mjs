@@ -18,7 +18,7 @@ export const handler = (event, context) => {
 
     // Try storing parameters in SSM Parameter Store
     try {
-        const { SQSQueueUrl, DynamoDBTableName } = event.ResourceProperties;
+        const { SQSQueueUrl, IdentifySpeakersQueueUrl, DynamoDBTableName } = event.ResourceProperties;
 
         if (process.env.AWS_SAM_LOCAL) {
             console.log('Running locally. Skipping SSM Parameter Store update.');
@@ -35,6 +35,15 @@ export const handler = (event, context) => {
             Type: 'String',
             Overwrite: true
         }).promise();
+        
+        // Store Identify Speakers Queue URL in Parameter Store
+        console.log(`Storing Identify Speakers Queue URL: ${IdentifySpeakersQueueUrl}`);
+        const storeIdentifySpeakersResult = ssm.putParameter({
+            Name: '/converse/IDENTIFY_SPEAKERS_QUEUE_URL',
+            Value: IdentifySpeakersQueueUrl,
+            Type: 'String',
+            Overwrite: true
+        }).promise();
 
         // Store DynamoDB Table Name in Parameter Store
         console.log(`Storing DynamoDB Table Name: ${DynamoDBTableName}`);
@@ -45,7 +54,7 @@ export const handler = (event, context) => {
             Overwrite: true
         }).promise();
 
-        Promise.all([storeSQSResult, storeDynamoDBResult]).then(() => {
+        Promise.all([storeSQSResult, storeIdentifySpeakersResult, storeDynamoDBResult]).then(() => {
             responseStatus = "SUCCESS";
             responseData = {
                 SQSQueueUrl: SQSQueueUrl,

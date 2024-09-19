@@ -1,12 +1,13 @@
+"use strict"
+
 import aws from 'aws-sdk';
+import crypto from 'crypto';
 import OpenAI from "openai";
+import exponentialBackoff from './utils/backoff.mjs';
+import contextMessages from './resources/speaker-config.json' assert { type: "json" };
 
 const sqs = new aws.SQS();
 const dynamoDb = new aws.DynamoDB.DocumentClient();
-const secretManagerClient = new aws.SecretsManager();
-const openai = new OpenAI();
-import updatedMessages from './resources/reader-config.json' assert { type: "json" };
-import crypto from 'crypto';
 
 
 export const narrateConversation = async (event) => {
@@ -15,46 +16,53 @@ export const narrateConversation = async (event) => {
     }
 
     const body = JSON.parse(event.body);
-    console.log(process.env);
     const { text } = body;
-    const session_name = crypto.randomBytes(6).toString('hex');
+    const session_name = crypto.randomBytes(16).toString('hex');
+
     try {
+
+        // Split text into paragraphs
+        const paragraphs = text.split(/\n\s*\n/);
+        const content = {text};
+        //identify all speakers in text
+        const openai = new OpenAI();
+        const messages = [...contextMessages, { role: "user", content: JSON.stringify(content) }];
+        console.log(`${session_name} messages:`,messages);
+        // Step 1: Identify speakers for the entire paragraph with context
+        const completion = await exponentialBackoff(async () => {
+            return await openai.chat.completions.create({
+                model: "gpt-4o-mini",
+                messages
+            });
+        });
+        
+        console.log(`completion:`,completion.choices[0].message, completion.choices[0].message.speakers);
+
+        const {speakers} = completion.choices[0].message;
         // Initialize the session status in DynamoDB
+        // Store the entire conversation as paragraphs
         await dynamoDb.put({
             TableName: process.env.DYNAMODB_TABLE,
             Item: {
                 session_name,
                 status: 'in progress',
-                created_at: new Date().toISOString()
+                created_at: new Date().toISOString(),
+                text,
+                speakers,
+                paragraphs,  // Store the paragraphs so identify-speakers can use them for context
+                pending_audio_files: 0  // Initialize pending audio files to 0
             }
         }).promise();
 
-        // Get OpenAI secret
-        const result = await secretManagerClient.getSecretValue({ SecretId: 'dev/converse/OpenAI' }).promise();
-        const openAISecret = JSON.parse(result.SecretString);
-        openai.apiKey = openAISecret.apiKey;
-
-        // Step 1: Identify speakers using OpenAI
-        const messages = [...updatedMessages, { role: "user", content: text }];
-        const completion = await openai.chat.completions.create({
-            messages,
-            model: "gpt-4o-mini"
-        });
-
-
-        const speakers = JSON.parse(completion.choices[0].message.content);
-        console.log(speakers);
-
-        // Step 2: Queue up each speaker's text for audio generation
-        for (const [index, speaker] of speakers.conversation.entries()) {
+        // Queue each paragraph for speaker identification
+        for (const [index, paragraph] of paragraphs.entries()) {
             const params = {
-                QueueUrl: process.env.SQS_QUEUE_URL,
+                QueueUrl: process.env.IDENTIFY_SPEAKERS_QUEUE_URL,
                 MessageBody: JSON.stringify({
-                    index,
-                    speaker: speaker.speaker,
-                    voice: speaker.voice,
-                    text: speaker.text,
-                    session_name
+                    session_name,
+                    speakers,
+                    paragraph,
+                    index
                 })
             };
             await sqs.sendMessage(params).promise();
@@ -62,11 +70,11 @@ export const narrateConversation = async (event) => {
 
         return {
             statusCode: 200,
-            body: JSON.stringify({ message: 'Speakers identified and audio generation queued.', session_name })
+            body: JSON.stringify({ message: 'Paragraphs queued for speaker identification.', session_name })
         };
 
     } catch (error) {
-        console.error('Error narrating conversation:', error);
+        console.error(`Error narrating conversation in session ${session_name}:', error);
         return {
             statusCode: 500,
             body: JSON.stringify({ error: error.message })
