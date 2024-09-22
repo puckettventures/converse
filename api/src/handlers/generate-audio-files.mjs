@@ -1,3 +1,5 @@
+"use strict"
+
 import aws from 'aws-sdk';
 import OpenAI from "openai";
 import exponentialBackoff from './utils/backoff.mjs';
@@ -7,7 +9,7 @@ const dynamoDb = new aws.DynamoDB.DocumentClient();
 const secretManagerClient = new aws.SecretsManager();
 const openai = new OpenAI();
 
-export const generateAudioFiles = async (event) => {
+export const generateAudioFiles = async (event, context) => {
     let last_session_name = '';
     try {
         const result = await secretManagerClient.getSecretValue({ SecretId: 'dev/converse/OpenAI' }).promise();
@@ -20,20 +22,19 @@ export const generateAudioFiles = async (event) => {
     }
 
     for (const record of event.Records) {
-        console.log('received record', record);
+        console.log(`received record  ID: ${context.awsRequestId}`, record);
         const { index, speaker, voice, text, session_name } = JSON.parse(record.body);
-        last_session_name = session_name;
+        last_session_name = session_name; 
         try {
             // Step 1: Generate MP3 file using OpenAI TTS with exponential backoff
             const fileName = `${index}-${speaker}.mp3`;
-
             const mp3 = await exponentialBackoff(async () => {
                 return await openai.audio.speech.create({
                     model: "tts-1-hd",
                     voice: voice,
                     input: text,
                 });
-            });
+            }, ` session_name: ${session_name}, attempted speach for ${fileName}`);
 
             const buffer = Buffer.from(await mp3.arrayBuffer());
 
@@ -83,10 +84,10 @@ export const generateAudioFiles = async (event) => {
                 }).promise();
             }
 
-            console.log(`Audio for ${speaker} uploaded to: ${uploadResult.Location}`);
+            console.log(`Audio for ${speaker} uploaded to: ${uploadResult.Location}  ID: ${context.awsRequestId}`);
 
         } catch (error) {
-            console.error(`Error generating audio for speaker ${speaker}:`, error);
+            console.error(`Error generating audio for speaker ${speaker}  ID: ${context.awsRequestId} for index:${index}`, error);
         }
     }
 };

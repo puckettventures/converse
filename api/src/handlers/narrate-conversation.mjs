@@ -8,6 +8,8 @@ import contextMessages from './resources/speaker-config.json' assert { type: "js
 
 const sqs = new aws.SQS();
 const dynamoDb = new aws.DynamoDB.DocumentClient();
+const secretManagerClient = new aws.SecretsManager();
+const openai = new OpenAI();
 
 
 export const narrateConversation = async (event) => {
@@ -20,12 +22,14 @@ export const narrateConversation = async (event) => {
     const session_name = crypto.randomBytes(16).toString('hex');
 
     try {
+        const result = await secretManagerClient.getSecretValue({ SecretId: 'dev/converse/OpenAI' }).promise();
+        const openAISecret = JSON.parse(result.SecretString);
+        openai.apiKey = openAISecret.apiKey;
 
         // Split text into paragraphs
         const paragraphs = text.split(/\n\s*\n/);
         const content = {text};
         //identify all speakers in text
-        const openai = new OpenAI();
         const messages = [...contextMessages, { role: "user", content: JSON.stringify(content) }];
         console.log(`${session_name} messages:`,messages);
         // Step 1: Identify speakers for the entire paragraph with context
@@ -34,11 +38,11 @@ export const narrateConversation = async (event) => {
                 model: "gpt-4o-mini",
                 messages
             });
-        });
+        }, ` session_name: ${session_name}, attempted speaker list for text`);
         
-        console.log(`completion:`,completion.choices[0].message, completion.choices[0].message.speakers);
+        console.log(`completion:`,completion.choices[0].message, completion.choices[0].message.content);
 
-        const {speakers} = completion.choices[0].message;
+        const {speakers} = JSON.parse(completion.choices[0].message.content);
         // Initialize the session status in DynamoDB
         // Store the entire conversation as paragraphs
         await dynamoDb.put({
@@ -74,7 +78,7 @@ export const narrateConversation = async (event) => {
         };
 
     } catch (error) {
-        console.error(`Error narrating conversation in session ${session_name}:', error);
+        console.error(`Error narrating conversation in session ${session_name}:`, error);
         return {
             statusCode: 500,
             body: JSON.stringify({ error: error.message })

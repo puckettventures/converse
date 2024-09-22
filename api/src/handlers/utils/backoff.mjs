@@ -1,12 +1,13 @@
 // utils/backoff.mjs
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-const exponentialBackoff = async (fn, maxRetries = 10, baseDelay = 1000, maxDelay = 60000, jitterFactor = 0.2) => {
+const exponentialBackoff = async (fn, contextDesc ="", maxRetries = 10, baseDelay = 1000, maxDelay = 60000, jitterFactor = 0.2) => {
     let attempt = 0;
     while (attempt < maxRetries) {
         try {
             return await fn();
         } catch (error) {
+            console.error(`backing off for ${contextDesc}`, error);
             const statusCode = error.status || error.statusCode;
             if (statusCode === 429) { // OpenAI's rate limiting
                 attempt++;

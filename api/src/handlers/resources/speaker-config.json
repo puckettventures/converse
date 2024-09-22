@@ -1,7 +1,7 @@
 [
     {
       "role": "system",
-      "content": "You are a system that identifies different characters, known as speakers, and assigns TTS character voices to each character. Use voices supported by OpenAI TTS in text in order to organize it into structured and ordered json text to generate a TTS conversation. The array of current voices is '[\"alloy\", \"echo\", \"fable\", \"onyx\", \"nova\", \"shimmer\"]'. Choose voices that align with the characters style where possible and If the speaker's name sounds like a male name, use alloy, echo, fable, or onx, for female, use nova or shimmer. Use full speaker names when possible (e.g., Bret Stephens instead of Bret) and assign TTS voices accordingly. For example, return the result in a structured JSON format like this:\n                [\n                    {\"speaker\": \"Speaker Name 1\", \"voice\": \"voice1\"},\n                    {\"speaker\": \"Speaker Name 2\", \"voice\": \"voice2\"}\n                ]."
+      "content": "You are a system that identifies different characters, known as speakers, and assigns TTS character voices to each character. Use voices supported by OpenAI TTS in text in order to organize it into structured and ordered json text to generate a TTS conversation. The array of current voices is '[\"alloy\", \"echo\", \"fable\", \"onyx\", \"nova\", \"shimmer\"]'. Choose voices that align with the characters style where possible and If the speaker's name sounds like a male name, use alloy, echo, fable, or onyx, for female, use nova or shimmer. Use full speaker names when possible (e.g., Bret Stephens instead of Bret) and assign TTS voices accordingly. For example, return the result in a structured JSON format like this:\n                [\n                    {\"speaker\": \"Speaker Name 1\", \"voice\": \"voice1\"},\n                    {\"speaker\": \"Speaker Name 2\", \"voice\": \"voice2\"}\n                ]."
     },
     {
       "role": "user",
@@ -9,6 +9,6 @@
     },
     {
       "role": "assistant",
-      "content": "{\n   \"speakers\":\n     [\n    {\n      \"speaker\": \"Bret Stephens\",\n      \"voice\": \"onx\"\n    },\n{\n      \"speaker\": \"Gail Collins\",\n      \"voice\": \"shimmer\"\n    }  ]\n}"
+      "content": "{\n   \"speakers\":\n     [\n    {\n      \"speaker\": \"Bret Stephens\",\n      \"voice\": \"onyx\"\n    },\n{\n      \"speaker\": \"Gail Collins\",\n      \"voice\": \"shimmer\"\n    }  ]\n}"
     }
 ]

@@ -45,14 +45,14 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: AudioQueue
-      VisibilityTimeout: 900
+      VisibilityTimeout: 43200
 
   # Define the SQS queue for Speaker Identification
   IdentifySpeakersQueue:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: IdentifySpeakersQueue
-      VisibilityTimeout: 900
+      VisibilityTimeout: 43200
 
   # Define the DynamoDB table for tracking conversation statuses and pending audio files
   NarrationStatusTable:
@@ -110,11 +110,13 @@ Resources:
     Properties:
       Role: !GetAtt LambdaExecutionRole.Arn
       Handler: src/handlers/identify-speakers.identifySpeakers
+      Timeout: 900  # Override timeout for this function
       Events:
         SQSQueueEvent:
           Type: SQS
           Properties:
             Queue: !GetAtt IdentifySpeakersQueue.Arn
+            BatchSize: 3
 
   # Lambda function that processes the SQS queue messages and generates audio files
   GenerateAudioFilesFunction:
