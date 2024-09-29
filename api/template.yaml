@@ -34,8 +34,11 @@ Globals:
           - "PLACEHOLDER_DYNAMODB_TABLE"
           - !Sub "{{resolve:ssm:/converse/DYNAMODB_TABLE}}"
         OPENAI_API_KEY: !Sub "{{resolve:secretsmanager:dev/converse/OpenAI}}"
+        MERGE_AUDIO_FILES_QUEUE_URL: !If
+          - UseFallbackValues
+          - "PLACEHOLDER_MERGE_AUDIO_FILES_QUEUE_URL"
+          - !Sub "{{resolve:ssm:/converse/MERGE_AUDIO_FILES_QUEUE_URL}}"
         S3_BUCKET: "converse-bucket"
-
 Conditions:
   UseFallbackValues: !Equals [ !Ref UseSSMParameters, "false" ]
 
@@ -53,6 +56,29 @@ Resources:
     Properties:
       QueueName: IdentifySpeakersQueue
       VisibilityTimeout: 43200
+
+  # Define the new SQS queue for merging audio files
+  MergeAudioFilesQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: MergeAudioFilesQueue
+      VisibilityTimeout: 43200
+
+  # Define the new Lambda function that merges audio files
+  MergeAudioFilesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Handler: src/handlers/merge-audio-files.mergeAudioFiles
+      Timeout: 900  # 15 minutes timeout
+#      Layers:
+#        - arn:aws:lambda:us-east-1:390403898534:layer:ffmpeg:1  #for merging audio
+      Events:
+        SQSQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt MergeAudioFilesQueue.Arn
+            BatchSize: 1  # Process one merge request at a time
 
   # Define the DynamoDB table for tracking conversation statuses and pending audio files
   NarrationStatusTable:
@@ -102,6 +128,19 @@ Resources:
           Type: Api
           Properties:
             Path: /narrate-conversation
+            Method: POST
+  
+  #Lambda function that outputs text split by a regex
+  Splitter:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Handler: src/handlers/splitter.splitter
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /splitter
             Method: POST
 
   # Lambda function that identifies speakers in paragraphs and sentences

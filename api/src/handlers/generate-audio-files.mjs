@@ -71,15 +71,26 @@ export const generateAudioFiles = async (event, context) => {
             }).promise();
 
             if (result.Item.pending_audio_files === 0) {
+                // Send message to MergeAudioFilesQueue to trigger merging
+                const mergeParams = {
+                    QueueUrl: process.env.MERGE_AUDIO_FILES_QUEUE_URL,
+                    MessageBody: JSON.stringify({
+                        session_name: session_name,
+                        audio_files: result.Item.audio_files
+                    })
+                };
+                await sqs.sendMessage(mergeParams).promise();
+            
+                // Mark session as ready for merging in DynamoDB
                 await dynamoDb.update({
                     TableName: process.env.DYNAMODB_TABLE,
                     Key: { session_name },
-                    UpdateExpression: "SET #status = :complete",
+                    UpdateExpression: "SET #status = :ready_to_merge",
                     ExpressionAttributeNames: {
                         "#status": "status"
                     },
                     ExpressionAttributeValues: {
-                        ":complete": "completed"
+                        ":ready_to_merge": "ready_to_merge"
                     }
                 }).promise();
             }

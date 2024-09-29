@@ -21,7 +21,7 @@ s3_prefix = "converse"
 region = "us-east-1"
 image_repositories = []
 disable_rollback = true
-parameter_overrides = "UseSSMParameters=\"true\""
+parameter_overrides = "UseSSMParameters=\"false\""
 
 [default.package.parameters]
 resolve_s3 = true
